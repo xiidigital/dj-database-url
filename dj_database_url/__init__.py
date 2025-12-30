@@ -250,3 +250,33 @@ def _convert_to_settings(
     if test_options:
         settings["TEST"] = test_options
     return settings
+
+
+def _install_debug_filter() -> None:
+    try:
+        from django.conf import settings
+        from django.views.debug import SafeExceptionReporterFilter
+    except Exception:
+        # Django not installed or not ready
+        return
+
+    if not getattr(settings, "DEBUG", False):
+        return
+
+    if hasattr(settings, "DEFAULT_EXCEPTION_REPORTER_FILTER"):
+        return
+
+    class _DatabaseURLReporterFilter(SafeExceptionReporterFilter):
+        def get_safe_settings(self):
+            safe = super().get_safe_settings()
+            databases = safe.get("DATABASES", {})
+            for _, cfg in databases.items():
+                if isinstance(cfg, dict) and "PASSWORD" in cfg:
+                    cfg["PASSWORD"] = "********"
+            return safe
+
+    settings.DEFAULT_EXCEPTION_REPORTER_FILTER = (
+        f"{__name__}._DatabaseURLReporterFilter"
+    )
+
+_install_debug_filter()
